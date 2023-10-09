@@ -1,84 +1,124 @@
 /*
- * @Description: 前端里程计算法
- * @Author: Ren Qian
- * @Date: 2020-02-04 18:52:45
+ * @Description: front end workflow
+ * @Author: Ge Yao
+ * @Date: 2021-01-30 22:38:22
  */
-#ifndef LIDAR_LOCALIZATION_FRONT_END_FRONT_END_HPP_
-#define LIDAR_LOCALIZATION_FRONT_END_FRONT_END_HPP_
+#ifndef LIDAR_LOCALIZATION_FRONT_END_HPP_
+#define LIDAR_LOCALIZATION_FRONT_END_HPP_
 
-#include <deque>
+#include <memory>
 
-#include <Eigen/Dense>
+#include <vector>
 
-#include <pcl/filters/voxel_grid.h>
-
-#include <pcl/registration/icp.h>
-#include <pcl/registration/ndt.h>
+#include <ros/ros.h>
 
 #include <yaml-cpp/yaml.h>
 
 #include "lidar_localization/sensor_data/cloud_data.hpp"
 
-#include "lidar_localization/models/cloud_filter/voxel_filter.hpp"
+#include <pcl/kdtree/kdtree_flann.h>
 
-#include "lidar_localization/models/registration/icp_registration.hpp"
-#include "lidar_localization/models/registration/icp_svd_registration.hpp"
+#include <Eigen/Core>
+#include <Eigen/Dense>
+#include <Eigen/Geometry>
 
-#include "lidar_localization/models/registration/ndt_registration.hpp"
-
-#include "lidar_localization/models/registration/sicp/scip_registration.hpp"
+#include "lidar_localization/models/loam/aloam_registration.hpp"
 
 namespace lidar_localization {
+
 class FrontEnd {
   public:
-    struct Frame { 
-        Eigen::Matrix4f pose = Eigen::Matrix4f::Identity();
-        CloudData cloud_data;
+    FrontEnd(void);
+
+    bool Update(
+      CloudData::CLOUD corner_sharp,
+      CloudData::CLOUD corner_less_sharp,
+      CloudData::CLOUD surf_flat,
+      CloudData::CLOUD surf_less_flat,
+      Eigen::Matrix4f& lidar_odometry
+    );
+
+  private:
+    struct CornerPointAssociation {
+      int query_index;
+
+      double ratio;
+
+      int associated_x_index;
+      int associated_y_index;
     };
 
-  public:
-    FrontEnd();
+    struct SurfacePointAssociation {
+      int query_index;
 
-    bool InitWithConfig();
-    bool Update(const CloudData& cloud_data, Eigen::Matrix4f& cloud_pose);
-    bool SetInitPose(const Eigen::Matrix4f& init_pose);
-
-    bool SaveMap();
-    bool GetNewLocalMap(CloudData::CLOUD_PTR& local_map_ptr);
-    bool GetNewGlobalMap(CloudData::CLOUD_PTR& global_map_ptr);
-    bool GetCurrentScan(CloudData::CLOUD_PTR& current_scan_ptr);
+      double ratio;
+      
+      int associated_x_index;
+      int associated_y_index;
+      int associated_z_index;
+    };
 
   private:
     bool InitParam(const YAML::Node& config_node);
-    bool InitDataPath(const YAML::Node& config_node);
-    bool InitRegistration(std::shared_ptr<RegistrationInterface>& registration_ptr, const YAML::Node& config_node);
-    bool InitFilter(std::string filter_user, std::shared_ptr<CloudFilterInterface>& filter_ptr, const YAML::Node& config_node);
-    bool UpdateWithNewFrame(const Frame& new_key_frame);
+    bool InitKdTrees(void);
+
+    bool TransformToStart(const CloudData::POINT &input, CloudData::POINT &output);
+
+    bool AssociateCornerPoints(
+      const CloudData::CLOUD &corner_sharp,
+      std::vector<CornerPointAssociation> &corner_point_associations
+    );
+    bool AssociateSurfacePoints(
+      const CloudData::CLOUD &surf_flat,
+      std::vector<SurfacePointAssociation> &surface_point_associations
+    );
+
+    bool AddEdgeFactors(
+        const CloudData::CLOUD &corner_sharp,
+        const std::vector<CornerPointAssociation> &corner_point_associations,
+        CeresALOAMRegistration &aloam_registration
+    );
+    bool AddPlaneFactors(
+        const CloudData::CLOUD &surf_flat,
+        const std::vector<SurfacePointAssociation> &surface_point_associations,
+        CeresALOAMRegistration &aloam_registration
+    );
+
+    bool SetTargetPoints(
+      const CloudData::CLOUD &corner_less_sharp,
+      const CloudData::CLOUD &surf_less_flat
+    );
+
+    bool UpdateOdometry(Eigen::Matrix4f& lidar_odometry);
 
   private:
-    std::string data_path_ = "";
+    struct {
+      float scan_period;
+      float distance_thresh;
+      float scan_thresh;
+    } config_;
 
-    std::shared_ptr<CloudFilterInterface> frame_filter_ptr_;
-    std::shared_ptr<CloudFilterInterface> local_map_filter_ptr_;
-    std::shared_ptr<CloudFilterInterface> display_filter_ptr_;
-    std::shared_ptr<RegistrationInterface> registration_ptr_; 
+    // target corner & plane feature points:
+    struct {
+      CloudData::CLOUD_PTR candidate_corner_ptr;
+      pcl::KdTreeFLANN<CloudData::POINT>::Ptr corner;
 
-    std::deque<Frame> local_map_frames_;
-    std::deque<Frame> global_map_frames_;
+      CloudData::CLOUD_PTR candidate_surface_ptr;
+      pcl::KdTreeFLANN<CloudData::POINT>::Ptr surface;
+    } kdtree_;
 
-    bool has_new_local_map_ = false;
-    bool has_new_global_map_ = false;
-    CloudData::CLOUD_PTR local_map_ptr_;
-    CloudData::CLOUD_PTR global_map_ptr_;
-    CloudData::CLOUD_PTR result_cloud_ptr_;
-    Frame current_frame_;
+    // whether the front end is inited:
+    bool inited_{false};
 
-    Eigen::Matrix4f init_pose_ = Eigen::Matrix4f::Identity();
+    // relative pose:
+    Eigen::Quaternionf dq_;
+    Eigen::Vector3f dt_;
 
-    float key_frame_distance_ = 2.0;
-    int local_frame_num_ = 20;
+    // odometry:
+    Eigen::Quaternionf q_;
+    Eigen::Vector3f t_;
 };
 
-}
+} // namespace lidar_localization
 
-#endif
+#endif // LIDAR_LOCALIZATION_FRONT_END_HPP_

@@ -1,52 +1,62 @@
-data_path: /home/ocean/lidar_localization/src/02-lidar-odometry-basic/src/lidar_localization   # 数据存放路径
-
-# 匹配
-# TODO: implement your custom registration method and add it here
-registration_method: ICP_SVD   # 选择点云匹配方法，目前支持：ICP, ICP_SVD, NDT, SICP
-
-# 局部地图
-key_frame_distance: 2.0 # 关键帧距离
-local_frame_num: 20
-local_map_filter: voxel_filter # 选择滑窗地图点云滤波方法，目前支持：voxel_filter
-
-# rviz显示
-display_filter: voxel_filter # rviz 实时显示点云时滤波方法，目前支持：voxel_filter
-
-# 当前帧
-frame_filter: voxel_filter # 选择当前帧点云滤波方法，目前支持：voxel_filter
-
-## 滤波相关参数
-voxel_filter:
-    local_map:
-        leaf_size: [0.6, 0.6, 0.6]
-    frame:
-        leaf_size: [1.3, 1.3, 1.3]
-    display:
-        leaf_size: [0.5, 0.5, 0.5]
-
-# 各配置选项对应参数
-## 匹配相关参数
-ICP:
-    max_corr_dist : 1.2
-    trans_eps : 0.01
-    euc_fitness_eps : 0.36
-    max_iter : 30
-ICP_SVD:
-    max_corr_dist : 0.5
-    trans_eps : 0.01
-    euc_fitness_eps : 0.36
-    max_iter : 10
-NDT:
-    res : 1.0
-    step_size : 0.1
-    trans_eps : 0.01
-    max_iter : 30
-SICP:
-    p : 1.0
-    mu : 10.0
-    alpha : 1.2
-    max_mu : 1e5
-    max_icp : 100
-    max_outer : 100
-    max_inner : 1
-    stop : 1e-5
+scan_registration:
+    subscriber:
+        velodyne:
+            topic_name: /kitti/velo/pointcloud
+            frame_id: velo_link
+            queue_size: 100
+    publisher:
+        filtered:
+            topic_name: /kitti/velo/pointcloud/filtered
+            frame_id: velo_link
+            queue_size: 100
+        sharp:
+            topic_name: /kitti/velo/pointcloud/sharp
+            frame_id: velo_link
+            queue_size: 100
+        less_sharp:
+            topic_name: /kitti/velo/pointcloud/less_sharp
+            frame_id: velo_link
+            queue_size: 100
+        flat:
+            topic_name: /kitti/velo/pointcloud/flat
+            frame_id: velo_link
+            queue_size: 100
+        less_flat:
+            topic_name: /kitti/velo/pointcloud/less_flat
+            frame_id: velo_link
+            queue_size: 100
+        removed:
+            topic_name: /kitti/velo/pointcloud/removed
+            frame_id: velo_link
+            queue_size: 100
+    param:
+        # used later for motion compensation:
+        scan_period: 0.10
+        # num. lidar scans:
+        num_scans: 64
+        # only measurements taken outside this range is kept:
+        min_range: 5.0
+        # neighborhood size for curvature calculation:
+        neighborhood_size: 5
+        # num. sectors for feature point generation:
+        num_sectors: 6
+        # feature point filters:
+        filter:
+            surf_less_flat:
+                leaf_size: [0.2, 0.2, 0.2]
+front_end:
+    publisher:
+        odometry:
+            topic_name: /odometry/lidar/scan_to_scan
+            frame_id: map
+            child_frame_id: velo_link
+            queue_size: 100
+        path:
+            topic_name: /trajectory/lidar/scan_to_scan
+            frame_id: map
+            queue_size: 100
+    param:
+        # kdtree nearest-neighborhood thresh:
+        distance_thresh: 25.0
+        # lidar scan neighborhood thresh:
+        scan_thresh: 2.50

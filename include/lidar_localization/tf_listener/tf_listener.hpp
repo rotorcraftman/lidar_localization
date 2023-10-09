@@ -1,5 +1,5 @@
 /*
- * @Description: TF listener
+ * @Description: tf监听模块
  * @Author: Ren Qian
  * @Date: 2020-02-06 16:01:21
  */
@@ -13,7 +13,6 @@
 #include <tf/transform_listener.h>
 
 namespace lidar_localization {
-
 class TFListener {
   public:
     TFListener(ros::NodeHandle& nh, std::string base_frame_id, std::string child_frame_id);
@@ -30,7 +29,6 @@ class TFListener {
     std::string base_frame_id_;
     std::string child_frame_id_;
 };
-
-} // namespace lidar_localization
+}
 
 #endif

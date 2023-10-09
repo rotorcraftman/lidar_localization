@@ -1,5 +1,5 @@
 /*
- * @Description: point cloud publisher
+ * @Description: 在ros中发布点云
  * @Author: Ren Qian
  * @Date: 2020-02-05 02:27:30
  */
@@ -17,18 +17,24 @@
 namespace lidar_localization {
 class CloudPublisher {
   public:
-    // frame_id：用来告诉你，发布的数据是来自哪一个坐标系的。
     CloudPublisher(ros::NodeHandle& nh,
                    std::string topic_name,
-                   size_t buff_size,
-                   std::string frame_id);
+                   std::string frame_id,
+                   size_t buff_size);
     CloudPublisher() = default;
-    void Publish(CloudData::CLOUD_PTR cloud_ptr_input);
+
+    void Publish(CloudData::CLOUD_PTR& cloud_ptr_input, double time);
+    void Publish(CloudData::CLOUD_PTR& cloud_ptr_input);
+
+    bool HasSubscribers();
+  
+  private:
+    void PublishData(CloudData::CLOUD_PTR& cloud_ptr_input, ros::Time time);
 
   private:
     ros::NodeHandle nh_;
     ros::Publisher publisher_;
     std::string frame_id_;
 };
-}
+} 
 #endif

@@ -1,258 +1,424 @@
 /*
- * @Description: 前端里程计算法
- * @Author: Ren Qian
- * @Date: 2020-02-04 18:53:06
+ * @Description: scan registration facade
+ * @Author: Ge Yao
+ * @Date: 2021-01-30 22:38:22
  */
 #include "lidar_localization/front_end/front_end.hpp"
 
-#include <fstream>
-#include <boost/filesystem.hpp>
-#include <pcl/common/transforms.h>
-#include <pcl/io/pcd_io.h>
 #include "glog/logging.h"
 
+#include "lidar_localization/tools/file_manager.hpp"
 #include "lidar_localization/global_defination/global_defination.h"
 
+#include <limits>
+#include <math.h>
+
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/common/io.h>
+
 namespace lidar_localization {
-FrontEnd::FrontEnd()
-    :local_map_ptr_(new CloudData::CLOUD()),
-     global_map_ptr_(new CloudData::CLOUD()),
-     result_cloud_ptr_(new CloudData::CLOUD()) {
 
-    InitWithConfig();
-}
-
-bool FrontEnd::InitWithConfig() {
+FrontEnd::FrontEnd(void) {
     std::string config_file_path = WORK_SPACE_PATH + "/config/front_end/config.yaml";
     YAML::Node config_node = YAML::LoadFile(config_file_path);
 
-    InitDataPath(config_node);
-    InitRegistration(registration_ptr_, config_node);
-    InitFilter("local_map", local_map_filter_ptr_, config_node);
-    InitFilter("frame", frame_filter_ptr_, config_node);
-    InitFilter("display", display_filter_ptr_, config_node);
+    // set LOAM front end params:
+    InitParam(config_node["front_end"]["param"]);
 
-    return true;
+    // init kdtrees for feature point association:
+    InitKdTrees();
 }
 
 bool FrontEnd::InitParam(const YAML::Node& config_node) {
-    key_frame_distance_ = config_node["key_frame_distance"].as<float>();
-    local_frame_num_ = config_node["local_frame_num"].as<int>();
+    config_.scan_period = 0.10f;
+    config_.distance_thresh = config_node["distance_thresh"].as<float>();
+    config_.scan_thresh = config_node["scan_thresh"].as<float>();
 
     return true;
 }
 
-bool FrontEnd::InitDataPath(const YAML::Node& config_node) {
-    data_path_ = config_node["data_path"].as<std::string>();
-    if (data_path_ == "./") {
-        data_path_ = WORK_SPACE_PATH;
-    }
-    data_path_ += "/slam_data";
+bool FrontEnd::InitKdTrees(void) {
+    kdtree_.corner.reset(new pcl::KdTreeFLANN<CloudData::POINT>());
+    kdtree_.surface.reset(new pcl::KdTreeFLANN<CloudData::POINT>());
 
-    if (boost::filesystem::is_directory(data_path_)) {
-        boost::filesystem::remove_all(data_path_);
-    }
+    return true;
+}
 
-    boost::filesystem::create_directory(data_path_);
-    if (!boost::filesystem::is_directory(data_path_)) {
-        LOG(WARNING) << "Cannot create directory " << data_path_ << "!";
-        return false;
-    } else {
-        LOG(INFO) << "Point Cloud Map Output Path: " << data_path_;
-    }
+bool FrontEnd::TransformToStart(const CloudData::POINT &input, CloudData::POINT &output) {
+    // interpolation ratio
+    float ratio = (input.intensity - int(input.intensity)) / config_.scan_period;
 
-    std::string key_frame_path = data_path_ + "/key_frames";
-    boost::filesystem::create_directory(data_path_ + "/key_frames");
-    if (!boost::filesystem::is_directory(key_frame_path)) {
-        LOG(WARNING) << "Cannot create directory " << key_frame_path << "!";
-        return false;
-    } else {
-        LOG(INFO) << "Key Frames Output Path: " << key_frame_path << std::endl << std::endl;
+    Eigen::Quaternionf dq = Eigen::Quaternionf::Identity().slerp(ratio, dq_);
+    Eigen::Vector3f dt = ratio * dt_;
+    Eigen::Vector3f p(input.x, input.y, input.z);
+    Eigen::Vector3f undistorted = dq * p + dt;
+
+    output.x = undistorted.x();
+    output.y = undistorted.y();
+    output.z = undistorted.z();
+    output.intensity = input.intensity;
+
+    return true;
+}
+
+bool FrontEnd::AssociateCornerPoints(
+    const CloudData::CLOUD &corner_sharp,
+    std::vector<CornerPointAssociation> &corner_point_associations
+) {
+    // find correspondence for corner features:
+    const int num_query_points = corner_sharp.points.size();
+
+    CloudData::POINT query_point;
+    std::vector<int> result_indices;
+    std::vector<float> result_squared_distances;
+    
+    corner_point_associations.clear();
+    for (int i = 0; i < num_query_points; ++i)
+    {
+        TransformToStart(corner_sharp.points[i], query_point);
+
+        // find nearest corner in previous scan:
+        kdtree_.corner->nearestKSearch(query_point, 1, result_indices, result_squared_distances);
+
+        if (result_squared_distances[0] < config_.distance_thresh)
+        {
+            CornerPointAssociation corner_point_association;
+
+            corner_point_association.query_index = i;
+            corner_point_association.ratio = (query_point.intensity - int(query_point.intensity)) / config_.scan_period;
+
+            // set the first associated point as the closest point:
+            corner_point_association.associated_x_index = result_indices[0];
+
+            // search the second associated point in nearby scans:
+            auto get_scan_id = [](const CloudData::POINT &point) { return static_cast<int>(point.intensity); };
+
+            int query_scan_id = get_scan_id(corner_sharp.points[corner_point_association.query_index]);
+
+            float min_distance = std::numeric_limits<float>::infinity();
+            int num_candidate_points = kdtree_.candidate_corner_ptr->points.size();
+            const auto &candidate_point = kdtree_.candidate_corner_ptr->points;
+
+            // search in the direction of increasing scan line
+            for (int j = corner_point_association.associated_x_index + 1; j < num_candidate_points; ++j)
+            {   
+                // get current scan id:
+                int curr_scan_id = get_scan_id(candidate_point[j]);
+
+                // if in the same scan line, skip:
+                if ( curr_scan_id <= query_scan_id )
+                    continue;
+
+                // if outside nearby scans, stop:
+                if ( curr_scan_id > (query_scan_id + config_.scan_thresh) )
+                    break;
+
+                // calculate deviation:
+                Eigen::Vector3f deviation{
+                    candidate_point[j].x - query_point.x,
+                    candidate_point[j].y - query_point.y,
+                    candidate_point[j].z - query_point.z
+                };
+                float curr_distance = deviation.squaredNorm();
+
+                // update associated point:
+                if ( curr_distance < min_distance )
+                {
+                    min_distance = curr_distance;
+                    corner_point_association.associated_y_index = j;
+                }
+            }
+
+            // search in the direction of decreasing scan line
+            for (int j = corner_point_association.associated_x_index - 1; j >= 0; --j)
+            {
+                // get current scan id:
+                int curr_scan_id = get_scan_id(candidate_point[j]);
+
+                // if in the same scan line, skip:
+                if ( curr_scan_id >= query_scan_id )
+                    continue;
+
+                // if outside nearby scans, stop:
+                if ( curr_scan_id < (query_scan_id - config_.scan_thresh))
+                    break;
+
+                // calculate deviation:
+                Eigen::Vector3f deviation{
+                    candidate_point[j].x - query_point.x,
+                    candidate_point[j].y - query_point.y,
+                    candidate_point[j].z - query_point.z
+                };
+                float curr_distance = deviation.squaredNorm();
+
+                // update associated point:
+                if ( curr_distance < min_distance )
+                {
+                    min_distance = curr_distance;
+                    corner_point_association.associated_y_index = j;
+                }
+            }
+
+            corner_point_associations.push_back(corner_point_association);
+        }
     }
 
     return true;
 }
 
-bool FrontEnd::InitRegistration(std::shared_ptr<RegistrationInterface>& registration_ptr, const YAML::Node& config_node) {
-    std::string registration_method = config_node["registration_method"].as<std::string>();
-    LOG(INFO) << "Point Cloud Registration Method: " << registration_method;
+bool FrontEnd::AssociateSurfacePoints(
+    const CloudData::CLOUD &surf_flat,
+    std::vector<SurfacePointAssociation> &surface_point_associations
+) {
+    const int num_query_points = surf_flat.points.size();
 
-    if (registration_method == "NDT") {
-        registration_ptr = std::make_shared<NDTRegistration>(config_node[registration_method]);
-    }
-    else if (registration_method == "ICP") {
-        registration_ptr = std::make_shared<ICPRegistration>(config_node[registration_method]);
-    }
-    else if (registration_method == "ICP_SVD") {
-        registration_ptr = std::make_shared<ICPSVDRegistration>(config_node[registration_method]);
-    }
-    else if (registration_method == "SICP") {
-        registration_ptr = std::make_shared<SICPRegistration>(config_node[registration_method]);
-    }
-    else if (registration_method == "YOUR_OWN_METHOD") {
-        /*
-            TODO: register your custom implementation here
-        */
-    }
-    else {
-        LOG(ERROR) << "Point cloud registration method " << registration_method << " NOT FOUND!";
-        return false;
+    CloudData::POINT query_point;
+    std::vector<int> result_indices;
+    std::vector<float> result_squared_distances;
+    
+    surface_point_associations.clear();
+    for (int i = 0; i < num_query_points; ++i)
+    {
+        TransformToStart(surf_flat.points[i], query_point);
+
+        // find nearest surface point in previous scan:
+        kdtree_.surface->nearestKSearch(query_point, 1, result_indices, result_squared_distances);
+
+        if (result_squared_distances[0] < config_.distance_thresh)
+        {
+            SurfacePointAssociation surface_point_association;
+
+            surface_point_association.query_index = i;
+            surface_point_association.ratio = (query_point.intensity - int(query_point.intensity)) / config_.scan_period;
+
+            // set the first associated point as the closest point:
+            surface_point_association.associated_x_index = result_indices[0];
+
+            // search the second & third associated point in nearby scans:
+            auto get_scan_id = [](const CloudData::POINT &point) { return static_cast<int>(point.intensity); };
+
+            int query_scan_id = get_scan_id(surf_flat.points[surface_point_association.query_index]);
+
+            float min_distance_y = std::numeric_limits<float>::infinity();
+            float min_distance_z = std::numeric_limits<float>::infinity();
+            int num_candidate_points = kdtree_.candidate_surface_ptr->points.size();
+            const auto &candidate_point = kdtree_.candidate_surface_ptr->points;
+
+            // search in the direction of increasing scan line
+            for (int j = surface_point_association.associated_x_index + 1; j < num_candidate_points; ++j)
+            {   
+                // get current scan id:
+                int curr_scan_id = get_scan_id(candidate_point[j]);
+
+                // if outside nearby scans, stop:
+                if ( curr_scan_id > (query_scan_id + config_.scan_thresh) )
+                    break;
+
+                // calculate deviation:
+                Eigen::Vector3f deviation{
+                    candidate_point[j].x - query_point.x,
+                    candidate_point[j].y - query_point.y,
+                    candidate_point[j].z - query_point.z
+                };
+                float curr_distance = deviation.squaredNorm();
+
+                // update the associated surface point, not above current scan:
+                if ( curr_scan_id <= query_scan_id && curr_distance < min_distance_y )
+                {
+                    min_distance_y = curr_distance;
+                    surface_point_association.associated_y_index = j;
+                }
+
+                // update the associated surface point, above current scan:
+                else if ( curr_scan_id > query_scan_id && curr_distance < min_distance_z )
+                {
+                    min_distance_z = curr_distance;
+                    surface_point_association.associated_z_index = j;
+                }
+            }
+
+            // search in the direction of decreasing scan line
+            for (int j = surface_point_association.associated_x_index - 1; j >= 0; --j)
+            {   
+                // get current scan id:
+                int curr_scan_id = get_scan_id(candidate_point[j]);
+
+                // if outside nearby scans, stop:
+                if ( curr_scan_id < (query_scan_id - config_.scan_thresh) )
+                    break;
+
+                // calculate deviation:
+                Eigen::Vector3f deviation{
+                    candidate_point[j].x - query_point.x,
+                    candidate_point[j].y - query_point.y,
+                    candidate_point[j].z - query_point.z
+                };
+                float curr_distance = deviation.squaredNorm();
+
+                // update the associated surface point, not above current scan:
+                if ( curr_scan_id >= query_scan_id && curr_distance < min_distance_y )
+                {
+                    min_distance_y = curr_distance;
+                    surface_point_association.associated_y_index = j;
+                }
+                else if ( curr_scan_id < query_scan_id && curr_distance < min_distance_z )
+                {
+                    // find nearer point
+                    min_distance_z = curr_distance;
+                    surface_point_association.associated_z_index = j;
+                }
+            }
+
+            surface_point_associations.push_back(surface_point_association);
+        }
     }
 
     return true;
 }
 
-bool FrontEnd::InitFilter(std::string filter_user, std::shared_ptr<CloudFilterInterface>& filter_ptr, const YAML::Node& config_node) {
-    std::string filter_mothod = config_node[filter_user + "_filter"].as<std::string>();
-    LOG(INFO) << filter_user << "Point Cloud Filter Method: " << filter_mothod;
+bool FrontEnd::AddEdgeFactors(
+    const CloudData::CLOUD &corner_sharp,
+    const std::vector<CornerPointAssociation> &corner_point_associations,
+    CeresALOAMRegistration &aloam_registration
+) {
+    for (const auto &corner_point_association: corner_point_associations) {
+        Eigen::Vector3d source{
+            corner_sharp.points[corner_point_association.query_index].x,
+            corner_sharp.points[corner_point_association.query_index].y,
+            corner_sharp.points[corner_point_association.query_index].z
+        };
 
-    if (filter_mothod == "voxel_filter") {
-        filter_ptr = std::make_shared<VoxelFilter>(config_node[filter_mothod][filter_user]);
-    } else {
-        LOG(ERROR) << "Point cloud filter method " << filter_mothod << " NOT FOUND!";
-        return false;
+        Eigen::Vector3d target_x{
+            kdtree_.candidate_corner_ptr->points[corner_point_association.associated_x_index].x,
+            kdtree_.candidate_corner_ptr->points[corner_point_association.associated_x_index].y,
+            kdtree_.candidate_corner_ptr->points[corner_point_association.associated_x_index].z
+        };
+    
+        Eigen::Vector3d target_y{
+            kdtree_.candidate_corner_ptr->points[corner_point_association.associated_y_index].x,
+            kdtree_.candidate_corner_ptr->points[corner_point_association.associated_y_index].y,
+            kdtree_.candidate_corner_ptr->points[corner_point_association.associated_y_index].z
+        };
+
+        aloam_registration.AddEdgeFactor(
+            source,
+            target_x, target_y,
+            corner_point_association.ratio
+        );
     }
 
     return true;
 }
 
-bool FrontEnd::Update(const CloudData& cloud_data, Eigen::Matrix4f& cloud_pose) {
-    current_frame_.cloud_data.time = cloud_data.time;
-    std::vector<int> indices;
-    pcl::removeNaNFromPointCloud(*cloud_data.cloud_ptr, *current_frame_.cloud_data.cloud_ptr, indices);
+bool FrontEnd::AddPlaneFactors(
+    const CloudData::CLOUD &surf_flat,
+    const std::vector<SurfacePointAssociation> &surface_point_associations,
+    CeresALOAMRegistration &aloam_registration
+) {
+    for (const auto &surface_point_association: surface_point_associations) {
+        Eigen::Vector3d source{
+            surf_flat.points[surface_point_association.query_index].x,
+            surf_flat.points[surface_point_association.query_index].y,
+            surf_flat.points[surface_point_association.query_index].z
+        };
 
-    CloudData::CLOUD_PTR filtered_cloud_ptr(new CloudData::CLOUD());
-    // 点云下采样
-    frame_filter_ptr_->Filter(current_frame_.cloud_data.cloud_ptr, filtered_cloud_ptr);
+        Eigen::Vector3d target_x{
+            kdtree_.candidate_surface_ptr->points[surface_point_association.associated_x_index].x,
+            kdtree_.candidate_surface_ptr->points[surface_point_association.associated_x_index].y,
+            kdtree_.candidate_surface_ptr->points[surface_point_association.associated_x_index].z
+        };
+    
+        Eigen::Vector3d target_y{
+            kdtree_.candidate_surface_ptr->points[surface_point_association.associated_y_index].x,
+            kdtree_.candidate_surface_ptr->points[surface_point_association.associated_y_index].y,
+            kdtree_.candidate_surface_ptr->points[surface_point_association.associated_y_index].z
+        };
 
-    static Eigen::Matrix4f step_pose = Eigen::Matrix4f::Identity();
-    static Eigen::Matrix4f last_pose = init_pose_;
-    static Eigen::Matrix4f predict_pose = init_pose_;
-    static Eigen::Matrix4f last_key_frame_pose = init_pose_;
+        Eigen::Vector3d target_z{
+            kdtree_.candidate_surface_ptr->points[surface_point_association.associated_z_index].x,
+            kdtree_.candidate_surface_ptr->points[surface_point_association.associated_z_index].y,
+            kdtree_.candidate_surface_ptr->points[surface_point_association.associated_z_index].z
+        };
 
-    // 局部地图容器中没有关键帧，代表是第一帧数据
-    // 此时把当前帧数据作为第一个关键帧，并更新局部地图容器和全局地图容器
-    if (local_map_frames_.size() == 0) {
-        current_frame_.pose = init_pose_;
-        UpdateWithNewFrame(current_frame_);
-        cloud_pose = current_frame_.pose;
-        return true;
-    }
-
-    // 不是第一帧，就正常匹配
-    registration_ptr_->ScanMatch(filtered_cloud_ptr, predict_pose, result_cloud_ptr_, current_frame_.pose);
-    cloud_pose = current_frame_.pose;
-
-    // 更新相邻两帧的相对运动
-    step_pose = last_pose.inverse() * current_frame_.pose;
-    // 用当前帧和恒速度模型预测下一帧位姿
-    predict_pose = current_frame_.pose * step_pose;
-    last_pose = current_frame_.pose;
-
-    // 匹配之后根据距离判断是否需要生成新的关键帧，如果需要，则做相应更新
-    if (fabs(last_key_frame_pose(0,3) - current_frame_.pose(0,3)) +
-        fabs(last_key_frame_pose(1,3) - current_frame_.pose(1,3)) +
-        fabs(last_key_frame_pose(2,3) - current_frame_.pose(2,3)) > key_frame_distance_) {
-        UpdateWithNewFrame(current_frame_);
-        last_key_frame_pose = current_frame_.pose;
+        aloam_registration.AddPlaneFactor(
+            source,
+            target_x, target_y, target_z,
+            surface_point_association.ratio
+        );
     }
 
     return true;
 }
 
-bool FrontEnd::SetInitPose(const Eigen::Matrix4f& init_pose) {
-    init_pose_ = init_pose;
-    return true;
-}
+bool FrontEnd::SetTargetPoints(
+    const CloudData::CLOUD &corner_less_sharp,
+    const CloudData::CLOUD &surf_less_flat
+) {
+    kdtree_.candidate_corner_ptr.reset(new CloudData::CLOUD());
+    pcl::copyPointCloud(corner_less_sharp, *kdtree_.candidate_corner_ptr);
+    kdtree_.corner->setInputCloud(kdtree_.candidate_corner_ptr);
 
-bool FrontEnd::UpdateWithNewFrame(const Frame& new_key_frame) {
-    // 把关键帧点云存储到硬盘里，节省内存
-    std::string file_path = data_path_ + "/key_frames/key_frame_" + std::to_string(global_map_frames_.size()) + ".pcd";
-    pcl::io::savePCDFileBinary(file_path, *new_key_frame.cloud_data.cloud_ptr);
-
-    Frame key_frame = new_key_frame;
-    // 这一步的目的是为了把关键帧的点云保存下来
-    // 由于用的是共享指针，所以直接复制只是复制了一个指针而已
-    // 此时无论你放多少个关键帧在容器里，这些关键帧点云指针都是指向的同一个点云
-    key_frame.cloud_data.cloud_ptr.reset(new CloudData::CLOUD(*new_key_frame.cloud_data.cloud_ptr));
-    CloudData::CLOUD_PTR transformed_cloud_ptr(new CloudData::CLOUD());
-
-    // 更新局部地图
-    local_map_frames_.push_back(key_frame);
-    while (local_map_frames_.size() > static_cast<size_t>(local_frame_num_)) {
-        local_map_frames_.pop_front();
+    kdtree_.candidate_surface_ptr.reset(new CloudData::CLOUD());
+    pcl::copyPointCloud(surf_less_flat, *kdtree_.candidate_surface_ptr);
+    kdtree_.surface->setInputCloud(kdtree_.candidate_surface_ptr);
+    
+    if ( !inited_ ) {
+        inited_ = true;
     }
-    local_map_ptr_.reset(new CloudData::CLOUD());
-    for (size_t i = 0; i < local_map_frames_.size(); ++i) {
-        pcl::transformPointCloud(*local_map_frames_.at(i).cloud_data.cloud_ptr,
-                                 *transformed_cloud_ptr,
-                                 local_map_frames_.at(i).pose);
-        *local_map_ptr_ += *transformed_cloud_ptr;
-    }
-    has_new_local_map_ = true;
-
-    // 更新ndt匹配的目标点云
-    // 关键帧数量还比较少的时候不滤波，因为点云本来就不多，太稀疏影响匹配效果
-    if (local_map_frames_.size() < 10) {
-        registration_ptr_->SetInputTarget(local_map_ptr_);
-    } else {
-        CloudData::CLOUD_PTR filtered_local_map_ptr(new CloudData::CLOUD());
-        local_map_filter_ptr_->Filter(local_map_ptr_, filtered_local_map_ptr);
-        registration_ptr_->SetInputTarget(filtered_local_map_ptr);
-    }
-
-    // 保存所有关键帧信息在容器里
-    // 存储之前，点云要先释放，因为已经存到了硬盘里，不释放也达不到节省内存的目的
-    key_frame.cloud_data.cloud_ptr.reset(new CloudData::CLOUD());
-    global_map_frames_.push_back(key_frame);
 
     return true;
 }
 
-bool FrontEnd::SaveMap() {
-    global_map_ptr_.reset(new CloudData::CLOUD());
+bool FrontEnd::UpdateOdometry(Eigen::Matrix4f& lidar_odometry) {
+    LOG(WARNING) << dq_.toRotationMatrix() << std::endl;
+    LOG(WARNING) << dt_ << std::endl;
 
-    std::string key_frame_path = "";
-    CloudData::CLOUD_PTR key_frame_cloud_ptr(new CloudData::CLOUD());
-    CloudData::CLOUD_PTR transformed_cloud_ptr(new CloudData::CLOUD());
+    q_ = q_ * dq_;
+    t_ = q_ * dt_ + t_;
 
-    for (size_t i = 0; i < global_map_frames_.size(); ++i) {
-        key_frame_path = data_path_ + "/key_frames/key_frame_" + std::to_string(i) + ".pcd";
-        pcl::io::loadPCDFile(key_frame_path, *key_frame_cloud_ptr);
-
-        pcl::transformPointCloud(*key_frame_cloud_ptr,
-                                *transformed_cloud_ptr,
-                                global_map_frames_.at(i).pose);
-        *global_map_ptr_ += *transformed_cloud_ptr;
-    }
-
-    std::string map_file_path = data_path_ + "/map.pcd";
-    pcl::io::savePCDFileBinary(map_file_path, *global_map_ptr_);
-    has_new_global_map_ = true;
+    lidar_odometry.block<3, 3>(0, 0) = q_.toRotationMatrix();
+    lidar_odometry.block<3, 1>(0, 3) = t_;
 
     return true;
 }
 
-bool FrontEnd::GetNewLocalMap(CloudData::CLOUD_PTR& local_map_ptr) {
-    if (has_new_local_map_) {
-        display_filter_ptr_->Filter(local_map_ptr_, local_map_ptr);
-        return true;
-    }
-    return false;
-}
+bool FrontEnd::Update(
+    CloudData::CLOUD corner_sharp,
+    CloudData::CLOUD corner_less_sharp,
+    CloudData::CLOUD surf_flat,
+    CloudData::CLOUD surf_less_flat,
+    Eigen::Matrix4f& lidar_odometry
+) {
+    // feature point association:
+    if ( inited_ ) {
+        std::vector<CornerPointAssociation> corner_point_associations;
+        AssociateCornerPoints(corner_sharp, corner_point_associations);
 
-bool FrontEnd::GetNewGlobalMap(CloudData::CLOUD_PTR& global_map_ptr) {
-    if (has_new_global_map_) {
-        has_new_global_map_ = false;
-        display_filter_ptr_->Filter(global_map_ptr_, global_map_ptr);
-        global_map_ptr_.reset(new CloudData::CLOUD());
-        return true;
-    }
-    return false;
-}
+        std::vector<SurfacePointAssociation> surface_point_associations;
+        AssociateSurfacePoints(surf_flat, surface_point_associations);
 
-bool FrontEnd::GetCurrentScan(CloudData::CLOUD_PTR& current_scan_ptr) {
-    display_filter_ptr_->Filter(result_cloud_ptr_, current_scan_ptr);
+        if (corner_point_associations.size() + surface_point_associations.size() < 10) {
+            return false;
+        }
+
+        // build problem:
+        CeresALOAMRegistration aloam_registration(dq_, dt_);
+        AddEdgeFactors(corner_sharp, corner_point_associations, aloam_registration);
+        AddPlaneFactors(surf_flat, surface_point_associations, aloam_registration);
+
+        // get relative pose:
+        aloam_registration.Optimize();
+        aloam_registration.GetOptimizedRelativePose(dq_, dt_);
+
+        // update odometry:
+        UpdateOdometry(lidar_odometry);
+    }
+
+    // set target feature points for next association:
+    SetTargetPoints(corner_less_sharp, surf_less_flat);
+
     return true;
 }
-}
+
+} // namespace lidar_localization

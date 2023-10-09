@@ -36,7 +36,7 @@ class SICPRegistration: public RegistrationInterface {
 
     Eigen::Matrix4f transformation_;
     // SICP::Parameters params_;
-    pcl::KdTreeFLANN<pcl::PointXYZ>::Ptr input_target_kdtree_;
+    pcl::KdTreeFLANN<CloudData::POINT>::Ptr input_target_kdtree_;
     // pcl::PointCloud<pcl::Normal>::Ptr target_normals;
 };
 

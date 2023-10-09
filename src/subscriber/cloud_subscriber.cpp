@@ -9,6 +9,7 @@
 #include "glog/logging.h"
 
 namespace lidar_localization {
+
 CloudSubscriber::CloudSubscriber(ros::NodeHandle& nh, std::string topic_name, size_t buff_size)
     :nh_(nh) {
     subscriber_ = nh_.subscribe(topic_name, buff_size, &CloudSubscriber::msg_callback, this);
@@ -28,4 +29,5 @@ void CloudSubscriber::ParseData(std::deque<CloudData>& cloud_data_buff) {
         new_cloud_data_.clear();
     }
 }
+
 } // namespace data_input

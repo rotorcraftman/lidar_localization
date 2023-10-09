@@ -20,7 +20,7 @@ namespace lidar_localization {
 
 ICPSVDRegistration::ICPSVDRegistration(
     const YAML::Node& node
-) : input_target_kdtree_(new pcl::KdTreeFLANN<pcl::PointXYZ>()) {
+) : input_target_kdtree_(new pcl::KdTreeFLANN<CloudData::POINT>()) {
     // parse params:
     float max_corr_dist = node["max_corr_dist"].as<float>();
     float trans_eps = node["trans_eps"].as<float>();
@@ -35,7 +35,7 @@ ICPSVDRegistration::ICPSVDRegistration(
     float trans_eps,
     float euc_fitness_eps,
     int max_iter
-) : input_target_kdtree_(new pcl::KdTreeFLANN<pcl::PointXYZ>()) {
+) : input_target_kdtree_(new pcl::KdTreeFLANN<CloudData::POINT>()) {
     SetRegistrationParam(max_corr_dist, trans_eps, euc_fitness_eps, max_iter);
 }
 
@@ -89,7 +89,7 @@ bool ICPSVDRegistration::ScanMatch(
     // TODO: first option -- implement all computing logic on your own
     //
     // do estimation:
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_source_trans(new pcl::PointCloud<pcl::PointXYZ>());
+    pcl::PointCloud<CloudData::POINT>::Ptr cloud_source_trans(new pcl::PointCloud<CloudData::POINT>());
     cloud_source_trans = input_source_;
     int curr_iter = 0;
     while (curr_iter < max_iter_) {

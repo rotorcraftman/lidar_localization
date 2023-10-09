@@ -62,7 +62,7 @@ class ICPSVDRegistration: public RegistrationInterface {
     int max_iter_;
 
     CloudData::CLOUD_PTR input_target_;
-    pcl::KdTreeFLANN<pcl::PointXYZ>::Ptr input_target_kdtree_;
+    pcl::KdTreeFLANN<CloudData::POINT>::Ptr input_target_kdtree_;
     CloudData::CLOUD_PTR input_source_;
 
     Eigen::Matrix4f transformation_;

@@ -34,8 +34,11 @@ include(cmake/geographic.cmake)
 include(cmake/glog.cmake)
 include(cmake/YAML.cmake)
 include(cmake/PCL.cmake)
+# include(cmake/eigen3.cmake)
+# include(cmake/sophus.cmake)
+include(cmake/ceres.cmake)
 
-include_directories(include ${catkin_INCLUDE_DIRS})
+include_directories(include ${catkin_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/Thirdparty/sophus)
 
 include(cmake/global_defination.cmake)
 catkin_package()
@@ -45,9 +48,29 @@ file(GLOB_RECURSE NODE_SRCS "src/*_node.cpp")
 
 list(REMOVE_ITEM ALL_SRCS ${NODE_SRCS})
 
+add_executable(scan_registration_node src/scan_registration_node.cpp ${ALL_SRCS})
+add_dependencies(scan_registration_node ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+target_link_libraries(scan_registration_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
+
 add_executable(front_end_node src/front_end_node.cpp ${ALL_SRCS})
 add_dependencies(front_end_node ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(front_end_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
+
+add_executable(aloam_laser_odometry_node src/aloam_laser_odometry_node.cpp ${ALL_SRCS})
+add_dependencies(aloam_laser_odometry_node ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+target_link_libraries(aloam_laser_odometry_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
+
+add_executable(aloam_mapping_node src/aloam_mapping_node.cpp ${ALL_SRCS})
+add_dependencies(aloam_mapping_node ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+target_link_libraries(aloam_mapping_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
+
+add_executable(evaluation_node src/evaluation_node.cpp ${ALL_SRCS})
+add_dependencies(evaluation_node ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+target_link_libraries(evaluation_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
+
+# add_executable(front_end_node src/front_end_node.cpp ${ALL_SRCS})
+# add_dependencies(front_end_node ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+# target_link_libraries(front_end_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
 
 #############
 ## Install ##
@@ -67,7 +90,12 @@ target_link_libraries(front_end_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES}
 ## See http://docs.ros.org/melodic/api/catkin/html/howto/format1/building_executables.html
 install(
     TARGETS
-        front_end_node
+        # front_end_node
+    scan_registration_node
+    front_end_node
+    aloam_laser_odometry_node
+    aloam_mapping_node
+    evaluation_node
     RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

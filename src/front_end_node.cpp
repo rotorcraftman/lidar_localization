@@ -50,12 +50,12 @@ int main(int argc, char *argv[]) {
 
         front_end_flow_ptr->Run();
 
-        if (save_map) {
-            front_end_flow_ptr->SaveMap();
-            front_end_flow_ptr->PublishGlobalMap();
+        // if (save_map) {
+        //     front_end_flow_ptr->SaveMap();
+        //     front_end_flow_ptr->PublishGlobalMap();
 
-            save_map = false;
-        }
+        //     save_map = false;
+        // }
 
         rate.sleep();
     }

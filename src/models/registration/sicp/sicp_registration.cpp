@@ -17,7 +17,7 @@ namespace lidar_localization {
 
 SICPRegistration::SICPRegistration(
     const YAML::Node& node
-):input_target_kdtree_(new pcl::KdTreeFLANN<pcl::PointXYZ>())
+):input_target_kdtree_(new pcl::KdTreeFLANN<CloudData::POINT>())
 {
     // parse params:
     // params_.p = node['p'].as<float>();
@@ -33,7 +33,7 @@ SICPRegistration::SICPRegistration(
 bool SICPRegistration::SetInputTarget(const CloudData::CLOUD_PTR& input_target) {
     input_target_ = input_target;
     input_target_kdtree_->setInputCloud(input_target_);
-    // pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> normalEstimator;
+    // pcl::NormalEstimation<CloudData::POINT, pcl::Normal> normalEstimator;
     // normalEstimator.setInputCloud(input_target_);
     // normalEstimator.setSearchMethod(input_target_kdtree_);
     // normalEstimator.setKSearch(15);

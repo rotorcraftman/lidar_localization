@@ -1,5 +1,5 @@
 /*
- * @Description: odometry publisher
+ * @Description: odometry 信息发布
  * @Author: Ren Qian
  * @Date: 2020-02-06 21:05:47
  */
