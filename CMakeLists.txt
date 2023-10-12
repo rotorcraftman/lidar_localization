@@ -48,6 +48,10 @@ file(GLOB_RECURSE NODE_SRCS "src/*_node.cpp")
 
 list(REMOVE_ITEM ALL_SRCS ${NODE_SRCS})
 
+add_executable(data_pretreat_node src/apps/data_pretreat_node.cpp ${ALL_SRCS})
+add_dependencies(data_pretreat_node ${catkin_EXPORTED_TARGETS})
+target_link_libraries(data_pretreat_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
+
 add_executable(scan_registration_node src/scan_registration_node.cpp ${ALL_SRCS})
 add_dependencies(scan_registration_node ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(scan_registration_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
@@ -91,6 +95,7 @@ target_link_libraries(evaluation_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES
 install(
     TARGETS
         # front_end_node
+    data_pretreat_node
     scan_registration_node
     front_end_node
     aloam_laser_odometry_node
