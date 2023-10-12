@@ -1,7 +1,7 @@
 scan_registration:
     subscriber:
         velodyne:
-            topic_name: /kitti/velo/pointcloud
+            topic_name: /synced_cloud #/kitti/velo/pointcloud
             frame_id: velo_link
             queue_size: 100
     publisher:
