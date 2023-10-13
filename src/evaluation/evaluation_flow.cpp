@@ -18,7 +18,7 @@ EvaluationFlow::EvaluationFlow(ros::NodeHandle& nh) {
 
     InitSubscribers(nh, config_node["measurements"]);
 
-    gnss_pub_ptr_ = std::make_shared<OdometryPublisher>(nh, "gnss_odom", "map", "velo_link", 100);
+    gnss_pub_ptr_ = std::make_shared<OdometryPublisher>(nh, "/gnss_odom", "map", "velo_link", 100);
 }
 
 bool EvaluationFlow::Run() {
