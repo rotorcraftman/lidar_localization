@@ -24,7 +24,6 @@ bool VelocityData::SyncData(std::deque<VelocityData>& UnsyncedData, std::deque<V
             return false;
         }
         if (UnsyncedData.at(1).time - sync_time > 0.2) {
-            UnsyncedData.pop_front();
             return false;
         }
         break;

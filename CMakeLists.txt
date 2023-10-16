@@ -21,6 +21,7 @@ find_package(catkin REQUIRED COMPONENTS
 add_service_files(
    FILES
    saveMap.srv
+   optimizeMap.srv
 )
 
 generate_messages(
@@ -37,6 +38,7 @@ include(cmake/PCL.cmake)
 # include(cmake/eigen3.cmake)
 # include(cmake/sophus.cmake)
 include(cmake/ceres.cmake)
+include(cmake/g2o.cmake)
 
 include_directories(include ${catkin_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/Thirdparty/sophus)
 
@@ -53,23 +55,28 @@ add_dependencies(data_pretreat_node ${catkin_EXPORTED_TARGETS})
 target_link_libraries(data_pretreat_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
 
 add_executable(scan_registration_node src/scan_registration_node.cpp ${ALL_SRCS})
-add_dependencies(scan_registration_node ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+add_dependencies(scan_registration_node ${PROJECT_NAME}_generate_messages_cpp ${catkin_EXPORTED_TARGETS})
 target_link_libraries(scan_registration_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
 
 add_executable(front_end_node src/front_end_node.cpp ${ALL_SRCS})
-add_dependencies(front_end_node ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+add_dependencies(front_end_node ${PROJECT_NAME}_generate_messages_cpp ${catkin_EXPORTED_TARGETS})
 target_link_libraries(front_end_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
 
 add_executable(aloam_laser_odometry_node src/aloam_laser_odometry_node.cpp ${ALL_SRCS})
-add_dependencies(aloam_laser_odometry_node ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+add_dependencies(aloam_laser_odometry_node ${PROJECT_NAME}_generate_messages_cpp ${catkin_EXPORTED_TARGETS})
 target_link_libraries(aloam_laser_odometry_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
 
 add_executable(aloam_mapping_node src/aloam_mapping_node.cpp ${ALL_SRCS})
-add_dependencies(aloam_mapping_node ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+add_dependencies(aloam_mapping_node ${PROJECT_NAME}_generate_messages_cpp ${catkin_EXPORTED_TARGETS})
 target_link_libraries(aloam_mapping_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
 
+add_executable(back_end_node src/apps/back_end_node.cpp ${ALL_SRCS})
+add_dependencies(back_end_node ${PROJECT_NAME}_generate_messages_cpp ${catkin_EXPORTED_TARGETS})
+target_link_libraries(back_end_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
+
+
 add_executable(evaluation_node src/evaluation_node.cpp ${ALL_SRCS})
-add_dependencies(evaluation_node ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+add_dependencies(evaluation_node ${PROJECT_NAME}_generate_messages_cpp ${catkin_EXPORTED_TARGETS})
 target_link_libraries(evaluation_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
 
 # add_executable(front_end_node src/front_end_node.cpp ${ALL_SRCS})
@@ -100,6 +107,7 @@ install(
     front_end_node
     aloam_laser_odometry_node
     aloam_mapping_node
+    back_end_node
     evaluation_node
     RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

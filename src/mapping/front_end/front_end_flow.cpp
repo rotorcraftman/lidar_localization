@@ -3,7 +3,7 @@
  * @Author: Ge Yao
  * @Date: 2021-01-30 22:38:22
  */
-#include "lidar_localization/front_end/front_end_flow.hpp"
+#include "lidar_localization/mapping/front_end/front_end_flow.hpp"
 
 #include "glog/logging.h"
 
@@ -13,7 +13,7 @@
 namespace lidar_localization {
 
 FrontEndFlow::FrontEndFlow(ros::NodeHandle& nh) {
-    std::string config_file_path = WORK_SPACE_PATH + "/config/front_end/config.yaml";
+    std::string config_file_path = WORK_SPACE_PATH + "/config/mapping/front_end.yaml";
     YAML::Node config_node = YAML::LoadFile(config_file_path);
 
     // subscriber to registered scans:

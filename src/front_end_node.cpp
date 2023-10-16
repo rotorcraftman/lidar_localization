@@ -11,7 +11,7 @@
 #include "lidar_localization/global_defination/global_defination.h"
 #include "glog/logging.h"
 
-#include "lidar_localization/front_end/front_end_flow.hpp"
+#include "lidar_localization/mapping/front_end/front_end_flow.hpp"
 
 #include <lidar_localization/saveMap.h>
 

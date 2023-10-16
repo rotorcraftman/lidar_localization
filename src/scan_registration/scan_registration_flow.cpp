@@ -13,7 +13,7 @@
 namespace lidar_localization {
 
 ScanRegistrationFlow::ScanRegistrationFlow(ros::NodeHandle& nh) {
-    std::string config_file_path = WORK_SPACE_PATH + "/config/front_end/config.yaml";
+    std::string config_file_path = WORK_SPACE_PATH + "/config/mapping/front_end.yaml";
     YAML::Node config_node = YAML::LoadFile(config_file_path);
 
     // subscriber to raw Velodyne measurements:

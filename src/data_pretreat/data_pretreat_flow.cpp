@@ -19,11 +19,11 @@ DataPretreatFlow::DataPretreatFlow(ros::NodeHandle& nh, std::string cloud_topic)
     velocity_sub_ptr_ = std::make_shared<VelocitySubscriber>(nh, "/kitti/oxts/gps/vel", 1000000);
     // d. OXTS GNSS:
     gnss_sub_ptr_ = std::make_shared<GNSSSubscriber>(nh, "/kitti/oxts/gps/fix", 1000000);
-    lidar_to_imu_ptr_ = std::make_shared<TFListener>(nh, "/imu_link", "/velo_link");
+    lidar_to_imu_ptr_ = std::make_shared<TFListener>(nh, "imu_link", "velo_link");
 
     // publisher
-    cloud_pub_ptr_ = std::make_shared<CloudPublisher>(nh, cloud_topic, "/velo_link", 100);
-    gnss_pub_ptr_ = std::make_shared<OdometryPublisher>(nh, "/synced_gnss", "/map", "/velo_link", 100);
+    cloud_pub_ptr_ = std::make_shared<CloudPublisher>(nh, cloud_topic, "velo_link", 100);
+    gnss_pub_ptr_ = std::make_shared<OdometryPublisher>(nh, "/synced_gnss", "map", "velo_link", 100);
 
     // motion compensation for lidar measurement:
     distortion_adjust_ptr_ = std::make_shared<DistortionAdjust>();
@@ -167,11 +167,11 @@ bool DataPretreatFlow::TransformData() {
     gnss_pose_(0,3) = current_gnss_data_.local_E;
     gnss_pose_(1,3) = current_gnss_data_.local_N;
     gnss_pose_(2,3) = current_gnss_data_.local_U;
-    std::cout << "[DEBUG] gnss_pose local: "
-              << "local_E : " << gnss_pose_(0, 3) << "\n"
-              << "local_N : " << gnss_pose_(1, 3) << "\n"
-              << "local_U : " << gnss_pose_(2, 3) << "\n"
-              << std::endl;
+    // std::cout << "[DEBUG] gnss_pose local: "
+    //           << "local_E : " << gnss_pose_(0, 3) << "\n"
+    //           << "local_N : " << gnss_pose_(1, 3) << "\n"
+    //           << "local_U : " << gnss_pose_(2, 3) << "\n"
+    //           << std::endl;
     // b. get orientation from IMU:
     gnss_pose_.block<3,3>(0,0) = current_imu_data_.GetOrientationMatrix();
     // this is lidar pose in GNSS/map frame:

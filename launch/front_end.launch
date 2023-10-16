@@ -19,10 +19,12 @@
 
     <node pkg="lidar_localization" type="aloam_mapping_node" name="aloam_mapping_node" output="screen" />
 
+    <node pkg="lidar_localization"  type="back_end_node"  name="back_end_node"  output="screen"></node>
+
     <node pkg="lidar_localization" type="evaluation_node" name="evaluation_node" output="screen" />
 
-    <node pkg="rviz"  type="rviz"  name="rviz"  args="-d $(find lidar_localization)/rviz/front_end.rviz"></node>
+    <!-- <node pkg="rviz"  type="rviz"  name="rviz"  args="-d $(find lidar_localization)/rviz/front_end.rviz"></node> -->
     <!-- <node pkg="lidar_localization"  type="front_end_node"  name="front_end_node"  output="screen"></node> -->
 
-    <node pkg="rosbag" type="play" name="rosbag" output="screen" args="-r 0.5 /home/ocean/Downloads/kitti_lidar_only_2011_10_03_drive_0027_synced.bag"/>
+    <!-- <node pkg="rosbag" type="play" name="rosbag" output="screen" args="-r 0.5 /home/ocean/Downloads/kitti_lidar_only_2011_10_03_drive_0027_synced.bag"/> -->
 </launch>
