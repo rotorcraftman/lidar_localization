@@ -18,19 +18,18 @@ Eigen::Matrix3f IMUData::GetOrientationMatrix() {
 
 bool IMUData::SyncData(std::deque<IMUData>& UnsyncedData, std::deque<IMUData>& SyncedData, double sync_time) {
     // 传感器数据按时间序列排列，在传感器数据中为同步的时间点找到合适的时间位置
-
-    // 找到与同步时间相邻的左右两个数据（while循环中处理）
+    // 即找到与同步时间相邻的左右两个数据
+    // 需要注意的是，如果左右相邻数据有一个离同步时间差值比较大，则说明数据有丢失，时间离得太远不适合做差值
     while (UnsyncedData.size() >= 2) {
         // UnsyncedData.front().time should be <= sync_time:
-        if (UnsyncedData.front().time > sync_time)
+        if (UnsyncedData.front().time > sync_time) 
             return false;
         // sync_time should be <= UnsyncedData.at(1).time:
         if (UnsyncedData.at(1).time < sync_time) {
             UnsyncedData.pop_front();
             continue;
         }
-        // 需要注意的是，如果左右相邻数据有一个离同步时间差值比较大，
-        // 则说明数据有丢失，时间离得太远不适合做差值
+
         // sync_time - UnsyncedData.front().time should be <= 0.2:
         if (sync_time - UnsyncedData.front().time > 0.2) {
             UnsyncedData.pop_front();
@@ -38,6 +37,7 @@ bool IMUData::SyncData(std::deque<IMUData>& UnsyncedData, std::deque<IMUData>& S
         }
         // UnsyncedData.at(1).time - sync_time should be <= 0.2
         if (UnsyncedData.at(1).time - sync_time > 0.2) {
+            UnsyncedData.pop_front();
             return false;
         }
         break;

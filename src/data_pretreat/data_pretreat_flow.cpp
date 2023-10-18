@@ -33,7 +33,7 @@ bool DataPretreatFlow::Run() {
     if (!ReadData())
         return false;
 
-    if (!InitCalibration())
+    if (!InitCalibration()) 
         return false;
 
     if (!InitGNSS())
@@ -102,7 +102,7 @@ bool DataPretreatFlow::InitGNSS() {
     static bool gnss_inited = false;
     if (!gnss_inited) {
         GNSSData gnss_data = gnss_data_buff_.front();
-        gnss_data.InitOriginPosition();
+        gnss_data.InitOriginPosition();                     //   读取当前gnss 初始化
         gnss_inited = true;
     }
 
@@ -167,11 +167,6 @@ bool DataPretreatFlow::TransformData() {
     gnss_pose_(0,3) = current_gnss_data_.local_E;
     gnss_pose_(1,3) = current_gnss_data_.local_N;
     gnss_pose_(2,3) = current_gnss_data_.local_U;
-    // std::cout << "[DEBUG] gnss_pose local: "
-    //           << "local_E : " << gnss_pose_(0, 3) << "\n"
-    //           << "local_N : " << gnss_pose_(1, 3) << "\n"
-    //           << "local_U : " << gnss_pose_(2, 3) << "\n"
-    //           << std::endl;
     // b. get orientation from IMU:
     gnss_pose_.block<3,3>(0,0) = current_imu_data_.GetOrientationMatrix();
     // this is lidar pose in GNSS/map frame:

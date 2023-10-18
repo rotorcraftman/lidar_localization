@@ -16,7 +16,6 @@
 #include "lidar_localization/sensor_data/pose_data.hpp"
 
 namespace lidar_localization {
-
 class OdometrySubscriber {
   public:
     OdometrySubscriber(ros::NodeHandle& nh, std::string topic_name, size_t buff_size);
@@ -33,7 +32,5 @@ class OdometrySubscriber {
 
     std::mutex buff_mutex_; 
 };
-
-} // namespace lidar_localization
-
+}
 #endif

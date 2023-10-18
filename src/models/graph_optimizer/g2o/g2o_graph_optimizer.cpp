@@ -1,5 +1,5 @@
 /*
- * @Description:
+ * @Description: 
  * @Author: Ren Qian
  * @Date: 2020-03-01 18:07:42
  */
@@ -93,7 +93,7 @@ void G2oGraphOptimizer::AddSe3Edge(
 
     g2o::VertexSE3* v1 = dynamic_cast<g2o::VertexSE3*>(graph_ptr_->vertex(vertex_index1));
     g2o::VertexSE3* v2 = dynamic_cast<g2o::VertexSE3*>(graph_ptr_->vertex(vertex_index2));
-
+    
     g2o::EdgeSE3 *edge(new g2o::EdgeSE3());
     edge->setMeasurement(relative_pose);
     edge->setInformation(information_matrix);

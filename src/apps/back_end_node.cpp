@@ -30,8 +30,8 @@ int main(int argc, char *argv[]) {
     ros::NodeHandle nh;
 
     std::string cloud_topic, odom_topic;
-    nh.param<std::string>("cloud_topic", cloud_topic, "/velodyne_cloud_registered_local");// /synced_cloud
-    nh.param<std::string>("odom_topic", odom_topic, "/laser_odom_scan_to_map");// /laser_odom
+    nh.param<std::string>("cloud_topic", cloud_topic, "/synced_cloud");
+    nh.param<std::string>("odom_topic", odom_topic, "/laser_odom");
 
     // subscribe to:
     // a. undistorted Velodyne measurement:

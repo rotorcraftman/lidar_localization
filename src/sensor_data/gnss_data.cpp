@@ -1,25 +1,36 @@
 /*
- * @Description:
+ * @Description: 
  * @Author: Ren Qian
  * @Date: 2020-02-06 20:42:23
  */
 #include "lidar_localization/sensor_data/gnss_data.hpp"
 
 #include "glog/logging.h"
+#include  <iostream>
 
 //静态成员变量必须在类外初始化
+double lidar_localization::GNSSData::origin_longitude = 0.0;
+double lidar_localization::GNSSData::origin_latitude = 0.0;
+double lidar_localization::GNSSData::origin_altitude = 0.0;
 bool lidar_localization::GNSSData::origin_position_inited = false;
-// 地理计算库 GeographicLib
-// https://blog.csdn.net/sinat_25923849/article/details/115625911
 GeographicLib::LocalCartesian lidar_localization::GNSSData::geo_converter;
 
 namespace lidar_localization {
 void GNSSData::InitOriginPosition() {
-    geo_converter.Reset(latitude, longitude, altitude);
+    std::cout <<  "----------------latitude  =   " << latitude  << std::endl;
+    std::cout <<  "----------------longitude  =   " << longitude  << std::endl;
+    std::cout <<  "----------------altitude  =   " << altitude  << std::endl;
+    geo_converter.Reset(48.982658,  8.390455, 116.396412);  
+   //geo_converter.Reset(latitude,  longitude, altitude);  
+
+    origin_longitude = longitude;
+    origin_latitude = latitude;
+    origin_altitude = altitude;
+
     origin_position_inited = true;
 }
 
-void GNSSData::UpdateXYZ() {
+void GNSSData::UpdateXYZ() {                                                   //   将经纬度转换为 x ,y ,z
     if (!origin_position_inited) {
         LOG(WARNING) << "GeoConverter has not set origin position";
     }
@@ -42,6 +53,7 @@ bool GNSSData::SyncData(std::deque<GNSSData>& UnsyncedData, std::deque<GNSSData>
             return false;
         }
         if (UnsyncedData.at(1).time - sync_time > 0.2) {
+            UnsyncedData.pop_front();
             return false;
         }
         break;
@@ -65,7 +77,7 @@ bool GNSSData::SyncData(std::deque<GNSSData>& UnsyncedData, std::deque<GNSSData>
     synced_data.local_U = front_data.local_U * front_scale + back_data.local_U * back_scale;
 
     SyncedData.push_back(synced_data);
-
+    
     return true;
 }
 }

@@ -29,7 +29,7 @@ class OdometryPublisher {
 
   private:
     void PublishData(const Eigen::Matrix4f& transform_matrix, ros::Time time);
-  
+
   private:
     ros::NodeHandle nh_;
     ros::Publisher publisher_;

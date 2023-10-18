@@ -10,7 +10,6 @@
 #include "lidar_localization/models/cloud_filter/cloud_filter_interface.hpp"
 
 namespace lidar_localization {
-
 class VoxelFilter: public CloudFilterInterface {
   public:
     VoxelFilter(const YAML::Node& node);
@@ -24,7 +23,5 @@ class VoxelFilter: public CloudFilterInterface {
   private:
     pcl::VoxelGrid<CloudData::POINT> voxel_filter_;
 };
-
 }
-
 #endif

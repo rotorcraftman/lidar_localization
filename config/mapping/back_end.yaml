@@ -1,5 +1,4 @@
-data_path: /home/ocean/lidar_localization/src/02-lidar-odometry-basic/src/lidar_localization/
-# 数据存放路径
+data_path: ./   # 数据存放路径
 
 # 关键帧
 key_frame_distance: 2.0 # 关键帧距离

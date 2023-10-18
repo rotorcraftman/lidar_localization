@@ -5,9 +5,9 @@
  */
 
 #include "lidar_localization/publisher/cloud_publisher.hpp"
+#include "glog/logging.h"
 
 namespace lidar_localization {
-    
 CloudPublisher::CloudPublisher(ros::NodeHandle& nh,
                                std::string topic_name,
                                std::string frame_id,
@@ -17,7 +17,7 @@ CloudPublisher::CloudPublisher(ros::NodeHandle& nh,
 }
 
 void CloudPublisher::Publish(CloudData::CLOUD_PTR&  cloud_ptr_input, double time) {
-    ros::Time ros_time(time);
+    ros::Time ros_time((float)time);
     PublishData(cloud_ptr_input, ros_time);
 }
 
@@ -38,5 +38,4 @@ void CloudPublisher::PublishData(CloudData::CLOUD_PTR&  cloud_ptr_input, ros::Ti
 bool CloudPublisher::HasSubscribers() {
     return publisher_.getNumSubscribers() != 0;
 }
-
-} // namespace data_output
+} // namespace lidar_localization

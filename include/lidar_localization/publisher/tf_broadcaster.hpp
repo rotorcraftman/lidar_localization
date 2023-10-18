@@ -1,7 +1,7 @@
 /*
- * @Description: TF broadcaster
- * @Author: Ge Yao
- * @Date: 2021-04-03
+ * @Description: 发布tf的类
+ * @Author: Ren Qian
+ * @Date: 2020-03-05 15:23:26
  */
 
 #ifndef LIDAR_LOCALIZATION_PUBLISHER_TF_BROADCASTER_HPP_
@@ -14,7 +14,6 @@
 #include <Eigen/Dense>
 
 namespace lidar_localization {
-
 class TFBroadCaster {
   public:
     TFBroadCaster(std::string frame_id, std::string child_frame_id);
@@ -24,7 +23,5 @@ class TFBroadCaster {
     tf::StampedTransform transform_;
     tf::TransformBroadcaster broadcaster_;
 };
-
 }
-
-#endif // namespace lidar_localization
+#endif

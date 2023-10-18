@@ -14,6 +14,7 @@
 #include "lidar_localization/sensor_data/cloud_data.hpp"
 #include "lidar_localization/sensor_data/pose_data.hpp"
 #include "lidar_localization/sensor_data/key_frame.hpp"
+#include "lidar_localization/sensor_data/loop_pose.hpp"
 
 #include "lidar_localization/models/graph_optimizer/g2o/g2o_graph_optimizer.hpp"
 
@@ -23,7 +24,7 @@ class BackEnd {
     BackEnd();
 
     bool Update(const CloudData& cloud_data, const PoseData& laser_odom, const PoseData& gnss_pose);
-    // bool InsertLoopPose(const LoopPose& loop_pose);
+    bool InsertLoopPose(const LoopPose& loop_pose);
     bool ForceOptimize();
 
     void GetOptimizedKeyFrames(std::deque<KeyFrame>& key_frames_deque);

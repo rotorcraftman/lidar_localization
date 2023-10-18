@@ -15,6 +15,7 @@ BackEndFlow::BackEndFlow(ros::NodeHandle& nh, std::string cloud_topic, std::stri
     cloud_sub_ptr_ = std::make_shared<CloudSubscriber>(nh, cloud_topic, 100000);
     gnss_pose_sub_ptr_ = std::make_shared<OdometrySubscriber>(nh, "/synced_gnss", 100000);
     laser_odom_sub_ptr_ = std::make_shared<OdometrySubscriber>(nh, odom_topic, 100000);
+    loop_pose_sub_ptr_ = std::make_shared<LoopPoseSubscriber>(nh, "/loop_pose", 100000);
 
     transformed_odom_pub_ptr_ = std::make_shared<OdometryPublisher>(nh, "/transformed_odom", "map", "lidar", 100);
     key_scan_pub_ptr_ = std::make_shared<CloudPublisher>(nh, "/key_scan", "velo_link", 100);
@@ -31,14 +32,12 @@ bool BackEndFlow::Run() {
         return false;
     
     // add loop poses for graph optimization:
-    // MaybeInsertLoopPose();
+    MaybeInsertLoopPose();
 
     while(HasData()) {
         // make sure undistorted Velodyne measurement -- lidar pose in map frame -- lidar odometry are synced:
         if (!ValidData())
             continue;
-
-        printf("This is test run back_end_flow\r\n");
 
         UpdateBackEnd();
 
@@ -62,11 +61,17 @@ bool BackEndFlow::ReadData() {
     cloud_sub_ptr_->ParseData(cloud_data_buff_);
     gnss_pose_sub_ptr_->ParseData(gnss_pose_data_buff_);
     laser_odom_sub_ptr_->ParseData(laser_odom_data_buff_);
+    loop_pose_sub_ptr_->ParseData(loop_pose_data_buff_);
 
     return true;
 }
 
 bool BackEndFlow::MaybeInsertLoopPose() {
+    while (loop_pose_data_buff_.size() > 0) {
+        back_end_ptr_->InsertLoopPose(loop_pose_data_buff_.front());
+        loop_pose_data_buff_.pop_front();
+    }
+    return true;
 }
 
 bool BackEndFlow::HasData() {

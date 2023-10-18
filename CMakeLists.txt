@@ -3,6 +3,7 @@ project(lidar_localization)
 
 SET(CMAKE_BUILD_TYPE "Release")
 SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
+SET(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g -ggdb")
 add_compile_options(-std=c++14)
 add_definitions(-std=c++14)
 
@@ -20,6 +21,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 add_service_files(
    FILES
+   saveScanContext.srv
    saveMap.srv
    optimizeMap.srv
 )
@@ -31,13 +33,11 @@ generate_messages(
 
 set(ALL_TARGET_LIBRARIES "")
 
-include(cmake/geographic.cmake)
 include(cmake/glog.cmake)
 include(cmake/YAML.cmake)
+include(cmake/geographic.cmake)
+include(cmake/protobuf.cmake)
 include(cmake/PCL.cmake)
-# include(cmake/eigen3.cmake)
-# include(cmake/sophus.cmake)
-include(cmake/ceres.cmake)
 include(cmake/g2o.cmake)
 
 include_directories(include ${catkin_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/Thirdparty/sophus)
@@ -46,42 +46,35 @@ include(cmake/global_defination.cmake)
 catkin_package()
 
 file(GLOB_RECURSE ALL_SRCS "*.cpp")
-file(GLOB_RECURSE NODE_SRCS "src/*_node.cpp")
-
+file(GLOB_RECURSE NODE_SRCS "src/apps/*_node.cpp")
 list(REMOVE_ITEM ALL_SRCS ${NODE_SRCS})
+
+add_executable(test_frame_node src/apps/test_frame_node.cpp ${ALL_SRCS})
+target_link_libraries(test_frame_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
 
 add_executable(data_pretreat_node src/apps/data_pretreat_node.cpp ${ALL_SRCS})
 add_dependencies(data_pretreat_node ${catkin_EXPORTED_TARGETS})
 target_link_libraries(data_pretreat_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
 
-add_executable(scan_registration_node src/scan_registration_node.cpp ${ALL_SRCS})
-add_dependencies(scan_registration_node ${PROJECT_NAME}_generate_messages_cpp ${catkin_EXPORTED_TARGETS})
-target_link_libraries(scan_registration_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
-
-add_executable(front_end_node src/front_end_node.cpp ${ALL_SRCS})
-add_dependencies(front_end_node ${PROJECT_NAME}_generate_messages_cpp ${catkin_EXPORTED_TARGETS})
+add_executable(front_end_node src/apps/front_end_node.cpp ${ALL_SRCS})
+add_dependencies(front_end_node ${catkin_EXPORTED_TARGETS})
 target_link_libraries(front_end_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
 
-add_executable(aloam_laser_odometry_node src/aloam_laser_odometry_node.cpp ${ALL_SRCS})
-add_dependencies(aloam_laser_odometry_node ${PROJECT_NAME}_generate_messages_cpp ${catkin_EXPORTED_TARGETS})
-target_link_libraries(aloam_laser_odometry_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
-
-add_executable(aloam_mapping_node src/aloam_mapping_node.cpp ${ALL_SRCS})
-add_dependencies(aloam_mapping_node ${PROJECT_NAME}_generate_messages_cpp ${catkin_EXPORTED_TARGETS})
-target_link_libraries(aloam_mapping_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
-
 add_executable(back_end_node src/apps/back_end_node.cpp ${ALL_SRCS})
-add_dependencies(back_end_node ${PROJECT_NAME}_generate_messages_cpp ${catkin_EXPORTED_TARGETS})
+add_dependencies(back_end_node ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(back_end_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
 
+add_executable(loop_closing_node src/apps/loop_closing_node.cpp ${ALL_SRCS})
+add_dependencies(loop_closing_node ${catkin_EXPORTED_TARGETS})
+target_link_libraries(loop_closing_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
 
-add_executable(evaluation_node src/evaluation_node.cpp ${ALL_SRCS})
-add_dependencies(evaluation_node ${PROJECT_NAME}_generate_messages_cpp ${catkin_EXPORTED_TARGETS})
-target_link_libraries(evaluation_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
+add_executable(viewer_node src/apps/viewer_node.cpp ${ALL_SRCS})
+add_dependencies(viewer_node ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+target_link_libraries(viewer_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
 
-# add_executable(front_end_node src/front_end_node.cpp ${ALL_SRCS})
-# add_dependencies(front_end_node ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
-# target_link_libraries(front_end_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
+add_executable(matching_node src/apps/matching_node.cpp ${ALL_SRCS})
+add_dependencies(matching_node ${catkin_EXPORTED_TARGETS})
+target_link_libraries(matching_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})
 
 #############
 ## Install ##
@@ -99,22 +92,19 @@ target_link_libraries(evaluation_node ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES
 
 ## Mark executables for installation
 ## See http://docs.ros.org/melodic/api/catkin/html/howto/format1/building_executables.html
-install(
-    TARGETS
-        # front_end_node
-    data_pretreat_node
-    scan_registration_node
-    front_end_node
-    aloam_laser_odometry_node
-    aloam_mapping_node
-    back_end_node
-    evaluation_node
+install(TARGETS 
+        test_frame_node
+        data_pretreat_node
+        front_end_node
+        back_end_node
+        loop_closing_node
+        viewer_node
+        matching_node
     RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
 ## Mark cpp header files for installation
-install(
-    DIRECTORY 
+install(DIRECTORY 
         include/
     DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
     FILES_MATCHING PATTERN "*.h"
@@ -122,20 +112,17 @@ install(
 )
 
 ## Mark other directories for installation:
-install(
-    DIRECTORY
+install(DIRECTORY
         launch/
     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
     FILES_MATCHING PATTERN "*.launch"
 )
-install(
-    DIRECTORY
+install(DIRECTORY
         config/
     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config
     FILES_MATCHING PATTERN "*.yaml"
 )
-install(
-    DIRECTORY
+install(DIRECTORY
         rviz/
     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/rviz
     FILES_MATCHING PATTERN "*.rviz"

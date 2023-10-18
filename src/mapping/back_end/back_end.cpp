@@ -105,7 +105,7 @@ bool BackEnd::Update(const CloudData& cloud_data, const PoseData& laser_odom, co
         SavePose(ground_truth_ofs_, gnss_pose.pose);
         SavePose(laser_odom_ofs_, laser_odom.pose);
         AddNodeAndEdge(gnss_pose);
-
+        
         if (MaybeOptimized()) {
             SaveOptimizedPose();
         }
@@ -114,7 +114,24 @@ bool BackEnd::Update(const CloudData& cloud_data, const PoseData& laser_odom, co
     return true;
 }
 
+bool BackEnd::InsertLoopPose(const LoopPose& loop_pose) {
+    if (!graph_optimizer_config_.use_loop_close)
+        return false;
 
+    Eigen::Isometry3d isometry;
+    isometry.matrix() = loop_pose.pose.cast<double>();
+    graph_optimizer_ptr_->AddSe3Edge(
+        loop_pose.index0, loop_pose.index1, 
+        isometry, 
+        graph_optimizer_config_.close_loop_noise
+    );
+
+    new_loop_cnt_ ++;
+    
+    LOG(INFO) << "Add loop closure: " << loop_pose.index0 << "," << loop_pose.index1 << std::endl;
+
+    return true;
+}
 
 void BackEnd::ResetParam() {
     has_new_key_frame_ = false;
@@ -125,7 +142,7 @@ bool BackEnd::SavePose(std::ofstream& ofs, const Eigen::Matrix4f& pose) {
     for (int i = 0; i < 3; ++i) {
         for (int j = 0; j < 4; ++j) {
             ofs << pose(i, j);
-
+            
             if (i == 2 && j == 3) {
                 ofs << std::endl;
             } else {
@@ -146,7 +163,7 @@ bool BackEnd::MaybeNewKeyFrame(const CloudData& cloud_data, const PoseData& lase
     }
 
     // whether the current scan is far away enough from last key frame:
-    if (fabs(laser_odom.pose(0,3) - last_key_pose(0,3)) +
+    if (fabs(laser_odom.pose(0,3) - last_key_pose(0,3)) + 
         fabs(laser_odom.pose(1,3) - last_key_pose(1,3)) +
         fabs(laser_odom.pose(2,3) - last_key_pose(2,3)) > key_frame_distance_) {
 
@@ -218,7 +235,7 @@ bool BackEnd::AddNodeAndEdge(const PoseData& gnss_data) {
 }
 
 bool BackEnd::MaybeOptimized() {
-    bool need_optimize = false;
+    bool need_optimize = false; 
 
     if (
         new_key_frame_cnt_ >= graph_optimizer_config_.optimize_step_with_key_frame ||
@@ -227,7 +244,7 @@ bool BackEnd::MaybeOptimized() {
     ) {
         need_optimize = true;
     }
-
+    
     if (!need_optimize)
         return false;
 
